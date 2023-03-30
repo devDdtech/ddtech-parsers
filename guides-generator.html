@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DD Tech Guides Generator</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+        integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="assets/css/shared.css">
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+        integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+        crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+        integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+        crossorigin="anonymous"></script>
+
+    <script src="assets/js/fontawesome/fontawesome.min.js"></script>
+    <script src="assets/js/fontawesome/solid.min.js"></script>
+
+    <script src="assets/js/shared.js"></script>
+    <script src="assets/js/monitor.js"></script>
+
+    <script type="text/javascript">
+        let guides = {};
+        let currentGuide = {};
+        let lastGuideRemoved = null;
+        let fileName = '';
+        let processedGuides = '';
+
+        $(document).ready(function() {
+            $('#dest_short_name').focus();
+
+            if (!window.localStorage.getItem('guides'))
+                window.localStorage.setItem('guides', JSON.stringify({}))
+
+            guides = JSON.parse(window.localStorage.getItem('guides'));
+            updateCounter(guides);
+
+            Object.getOwnPropertyNames(guides).forEach(guideKey => {
+                $('.guides-container').append(
+                    guideToHtml(guides[guideKey], guideKey)
+                );
+            });
+
+            // submit form on enter
+            $("input").on("keydown", function(event) {
+                if (event.keyCode === 13) {
+                if (event.shiftKey)
+                    return;
+                event.preventDefault();
+                $('.add-btn').click();
+                }
+            });
+            // submit form on enter
+        });
+
+        function addGuide() {
+            const guide = getCurrentGuide();
+            errors = validateGuide(guide);
+            if (errors.length != 0){
+                bootstrapAlert({errors: errors});
+                return;
+            }
+
+            const id = generateHashId();
+            guides[id] = guide;
+            updateLocalStorageGuides();
+
+            $('.guides-container').prepend(guideToHtml(guide, id));
+
+            const msg = `
+                La guía para <strong>${guide.destShortName}</strong>
+                se agregó a la lista de guías por procesar`;
+            bootstrapAlert({ msg: msg, icon: 'flag', type: 'success' });
+            cleanFields();
+            updateCounter(guides);
+            $('#dest_short_name').focus();
+
+            if (Object.getOwnPropertyNames(guides).length == 100)
+                processGuides();
+        }
+
+        function cleanAll() {
+            cleanFields();
+            cleanGuides();
+        }
+
+        function cleanFields() {
+            $('#origin_short_name').val('');
+            $('#dest_short_name').val('');
+            $('#weight').val('1');
+            $('#declared_value').val('');
+            $('#insurance_description').val('');
+            $('#aerial').prop('checked', false);
+
+            currentGuide = {};
+        }
+
+        function cleanGuides() {
+            guides = {};
+            updateLocalStorageGuides();
+            $('.guides-container').html('');
+            updateCounter(guides);
+        }
+
+        function getCurrentGuide() {
+            return currentGuide;
+        }
+
+        function guideToHtml(guide, guideKey) {
+            return `
+                <p class="guide-${guideKey} border rounded p-2">
+                    <button type="button" class="btn btn-danger mr-3" onclick="removeGuide('${guideKey}')">
+                        <i class="fas fa-times fa-lg"></i>
+                    </button>
+                    Origen <strong>${guide.originShortName}</strong> |
+                    Destino <strong>${guide.destShortName}</strong> |
+                    ${guide.weight}Kg |
+                    Asegurado ${guide.insurance} |
+                    Valor declarado: ${guide.declaredValue} |
+                    Descripción del seguro: ${guide.insuranceDescription}
+                </p>
+            `;
+        }
+
+        function guideToText(guide) {
+            const guideInTextFormat = `${guide.serviceCode}|${guide.weight}.0|P||${guide.declaredValue}|${guide.insurance}|ACCESORIOS DE COMPUTO|${guide.insuranceDescription}|ACCESORIOS||${guide.originShortName}|${guide.destShortName}|NOR||||1`;
+
+            return guideInTextFormat;
+        }
+
+        function processGuides() {
+            const guideKeys = Object.getOwnPropertyNames(guides);
+            if (guideKeys.length == 0){
+                bootstrapAlert({msg: 'No hay domicilios por procesar'});
+                return;
+            }
+
+            processedGuides = '#5898550|T||ZEBRA|PDF\n';
+            fileName = '';
+            $('.processed-guides').html(`<p>${processedGuides}</p>`);
+
+            guideKeys.forEach((guideKey, indx, array) => {
+                fileName += `#${guides[guideKey].destShortName} `;
+                processedGuides += guideToText(guides[guideKey]);
+                $('.processed-guides').append(`<p>${guideToText(guides[guideKey])}</p>`);
+                if (indx < array.length - 1) // Don't add a new line if it's the last one
+                    processedGuides += '\n';
+            });
+
+            fileName = fileName.trim();
+            $('.file-name').html(fileName.substring(0, 19) + '...');
+
+            $('#ddtech-modal').modal('show');
+            $('.copy-format').focus();
+            cleanAll();
+        }
+
+        function removeGuide(guideKey) {
+            lastGuideRemoved = guides[guideKey];
+
+            delete guides[guideKey];
+            updateLocalStorageGuides();
+
+            $('.guide-' + guideKey).remove();
+            updateCounter(guides);
+
+            msg = `
+                Se eliminó la dirección ${lastGuideRemoved.destShortName}
+                si deseas restaurarla haz click
+                <button class="btn btn-primary" onclick="restoreLastGuideRemoved()">Aquí</button>
+            `;
+            bootstrapAlert({ msg: msg, type: 'warning' })
+        }
+
+        function restoreLastGuideRemoved() {
+            if (!lastGuideRemoved)
+                return;
+
+            currentGuide = lastGuideRemoved;
+            addGuide();
+
+            lastGuideRemoved = null;
+        }
+
+        function updateCurrentGuide() {
+            currentGuide = {
+                serviceCode: $('#service_code').val(),
+                destShortName: $('#dest_short_name').val().toUpperCase(),
+                originShortName: $('#origin_short_name').val().toUpperCase(),
+                weight: $('#weight').val(),
+                declaredValue: $('#declared_value').val(),
+                insuranceDescription: $('#insurance_description').val().toUpperCase()
+            };
+
+            if (currentGuide['originShortName'].length == 0)
+                currentGuide['originShortName'] = 'DDTECH';
+            currentGuide['insurance'] = currentGuide['declaredValue'] ? 'V' : 'F';
+        }
+
+        function updateLocalStorageGuides() {
+            window.localStorage.setItem('guides', JSON.stringify(guides));
+        }
+
+        function validateGuide(guide) {
+            let errors = [];
+            if (!guide.destShortName)
+                errors.push('Se requiere un nombre corto');
+
+            if (guide.weight) {
+                if (guide.weight > 99)
+                    errors.push('El peso no puede exceder los 99 Kg');
+                if (guide.weight < 1)
+                    errors.push('El peso debe ser de al menos 1 Kg');
+                if (guide.weight.indexOf('.') != -1)
+                    errors.push('El peso no debe contener decimales');
+                if (guide.aerial && guide.weight > 1)
+                    errors.push('Las guías aereas son de 1Kg máximo');
+            } else {
+                errors.push('Se requiere el peso del paquete');
+            }
+
+            if ((guide.declaredValue && !guide.insuranceDescription) || (guide.insuranceDescription && !guide.declaredValue))
+                errors.push('Los datos para asegurar están incompletos se necesita la descripción así como el valor declarado');
+
+            return errors;
+        }
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <a class="navbar-brand" href="https://johnloza.github.io/ddtech-parsers/">
+            DD TECH Address Generator
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/">
+                        Domicilios Estafeta
+                    </a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/guides-generator.html">
+                        Guías Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/order-excel-parser.html">
+                        Bitácora de guías
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/insurance-calculator.html">
+                        Calculadora de Seguros
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <!-- Navbar end -->
+
+    <div class="container">
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Generador de Guías para ESTAFETA
+                    <small><span class="counter badge badge-primary">0</span></small>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="alerts-container mt-3"></div>
+                <div class="row">
+                    <section class="col-lg-6 col-md-12">
+                        <div class="form-group mb-2">
+                            <label for="service_code">Código de servicio</label>
+                            <select name="service_code" id="service_code" class="form-control"
+                                onchange="updateCurrentGuide()">
+                                <option value="70">Terrestre Por Consumo</option>
+                                <option value="78">Terrestre Prepagado</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="declared_value">Valor declarado (Opcional / Aseguramiento)</label>
+                            <input type="number" name="declared_value" id="declared_value" class="form-control"
+                                min="1" onkeyup="updateCurrentGuide()">
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="insurance_description">Descripción del seguro (Opcional / Aseguramiento)</label>
+                            <input type="text" name="insurance_description" id="insurance_description"
+                                class="form-control" maxlength="30" onkeyup="updateCurrentGuide()">
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="origin_short_name">Nombre Corto Origen (Opcional / Garantía / Devolución)</label>
+                            <input type="text" name="origin_short_name" id="origin_short_name"
+                                class="form-control" maxlength="50" onkeyup="updateCurrentGuide()">
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="dest_short_name">Nombre Corto Destino</label>
+                            <input type="text" name="dest_short_name" id="dest_short_name"
+                                class="form-control" maxlength="50" onkeyup="updateCurrentGuide()">
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="weight">Peso</label>
+                            <input type="number" name="weight" id="weight" class="form-control"
+                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
+                        </div>
+                    </section>
+
+                    <section class="col-lg-6 col-md-12">
+                        <div class="guide-preview mt-3"></div>
+                    </section>
+                </div>
+                <!-- Row end -->
+
+            </div>
+            <!-- Card body end -->
+
+            <div class="card-footer">
+                <button class="btn add-btn btn-primary mr-3" onclick="addGuide()">Agregar</button>
+                <button class="btn btn-success mr-3" onclick="processGuides()">Generar formato</button>
+                <button class="btn btn-info mr-3" onclick="$('#ddtech-modal').modal('show')">Último Procesado</button>
+                <button class="btn btn-secondary mr-3" onclick="cleanFields()">Limpiar</button>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div class="card mt-3 mb-5">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Guías por procesar
+                    <small><span class="counter badge badge-primary">0</span></small>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="text-center">
+                    <button class="btn btn-danger mb-3" onclick="cleanAll()">
+                        Limpiar guías
+                    </button>
+                </div>
+                <div class="guides-container"></div>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div id="ddtech-modal" class="modal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-light">
+                        <h5 class="modal-title">Guías procesadas</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="processed-container">
+                            <code class="processed-guides">
+                                Aquí no hay nada :/
+                            </code>
+                        </div>
+                        <div>
+                            <label for="">Nombre de archivo (para el PDF de ESTAFETA)</label>
+                            <p>Haz click para copearlo al porta papeles</p>
+                            <p class="file-name btn btn-primary" onclick="copyToClipboard(fileName)"></p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary copy-format" onclick="copyToClipboard(processedGuides)">
+                            Copear formato
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <!-- Container end -->
+
+</body>
+</html>

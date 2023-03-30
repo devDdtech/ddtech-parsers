@@ -1,0 +1,46 @@
+body { font-family: 'Roboto', sans-serif; }
+input[type="text"] { text-transform: uppercase; }
+
+.additional-info {
+    background-color: #17a2b8;
+    border-radius: 5px;
+    color: #fefefe;
+    padding: 3px 7px;
+}
+
+.card { background-color: rgba(255, 255, 255, 0.9) }
+
+.nav-item.active {
+    border: 1px solid #fefefe;
+    border-radius: 5px;
+}
+
+.order-total-preview {
+    background-color: green;
+    color: #fefefe;
+    padding: 0.3em;
+}
+.order-parcel-preview {
+    background-color: #666;
+    color: #fefefe;
+    padding: 0.3em;
+}
+.order-parcel-preview.estafeta { background-color: #e53935; }
+.order-parcel-preview.fedex { background-color: #3949ab; }
+.order-parcel-preview.zmg { background-color: #7cb342; }
+.order-parcel-preview.dhl { background-color: #fdd835; }
+
+.preview-error {
+    color: #fefefe;
+    background-color: red;
+    border-radius: 5px;
+    padding: 0.2em;
+}
+.preview-label { cursor: pointer; }
+.processed-container {
+    overflow-y: scroll;
+    height: 250px;
+}
+
+.table { font-size: 0.8em !important; }
+.text-light { color: #fefefe; }

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DD Tech Calculadora de Seguros</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+        integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+
+    <style>
+        body { font-family: 'Roboto', sans-serif; }
+        .card { background-color: rgba(255, 255, 255, 0.9) }
+        .text-light { color: #fefefe; }
+        .nav-item.active {
+            border: 1px solid #fefefe;
+            border-radius: 5px;
+        }
+        th.estafeta { background-color: #e53935; }
+        td.estafeta { background-color: #e57373; }
+        th.fedex { background-color: #3949ab; }
+        td.fedex { background-color: #7986cb; }
+    </style>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+        integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+        crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+        integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+        crossorigin="anonymous"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function() {
+            calculateInsurance();
+            $('#total').focus();
+        });
+
+        function updatePreview() {
+            const parcel = $('#parcel').val();
+            $('.parcel-preview').html(parcel);
+
+            $('th').removeClass('estafeta');
+            $('th').removeClass('fedex');
+            $('th').addClass(parcel.toLowerCase());
+
+            $('td').removeClass('estafeta');
+            $('td').removeClass('fedex');
+            $('td').addClass(parcel.toLowerCase());
+
+            calculateInsurance();
+        }
+
+        function calculateInsurance() {
+            const parcel = $('#parcel').val();
+            const total = Number( $('#total').val() );
+            const shipmentCost = Number( $('#shipment_cost').val() );
+            const insuranceCost = Number( $('#insurance_cost').val() );
+
+            const insuranceValueMod = parcel == 'ESTAFETA' ? 0.84 : 1;
+            const insuranceMod = parcel == 'ESTAFETA' ? 0.0125 : 0.01;
+            const additionMOd = parcel == 'FEDEX' ? 40 : 0;
+
+            let insuranceValue = (total - shipmentCost - insuranceCost) * insuranceValueMod;
+            let insurance = insuranceValue * insuranceMod + additionMOd;
+            insuranceValue = formatMoney(insuranceValue);
+            insurance = formatMoney(insurance);
+
+            $('.insurance-value-preview').html(insuranceValue);
+            $('.insurance-preview').html(insurance);
+        }
+
+        function formatMoney(amount) {
+            return `$${new Intl.NumberFormat().format(amount)} MXN`;
+        }
+    </script>
+</head>
+
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <a class="navbar-brand" href="https://johnloza.github.io/ddtech-parsers/">
+            DD TECH Address Generator
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/">
+                        Domicilios Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/guides-generator.html">
+                        Guías Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/order-excel-parser.html">
+                        Bitácora de Guías
+                    </a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/insurance-calculator.html">
+                        Calculadora de Seguros
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <!-- Navbar end -->
+
+    <div class="container">
+
+        <div class="alerts-container mt-3"></div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Calculadora de Seguros Estafeta y FedEx
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="row">
+                    <section class="col-lg-6 col-md-12">
+                        <div class="from-group mb-2">
+                            <label for="parcel">Paquetería</label>
+                            <select name="parcel" id="parcel" class="form-control" onchange="updatePreview()">
+                                <option disabled>Selecciona la paquetería</option>
+                                <option value="ESTAFETA">ESTAFETA</option>
+                                <option value="FEDEX">FEDEX</option>
+                            </select>
+                        </div>
+
+                        <div class="from-group mb-2">
+                            <label for="total">Total del pedido (incluyendo envío y seguro)</label>
+                            <input type="number" name="total" id="total"
+                                class="form-control" onkeyup="calculateInsurance()">
+                        </div>
+
+                        <div class="from-group mb-2">
+                            <label for="shipment_cost">Costo de envío</label>
+                            <input type="number" name="shipment_cost" id="shipment_cost"
+                                class="form-control" onkeyup="calculateInsurance()">
+                        </div>
+
+                        <div class="from-group mb-2">
+                            <label for="insurance_cost">Costo de aseguramiento</label>
+                            <input type="number" name="insurance_cost" id="insurance_cost"
+                                class="form-control" onkeyup="calculateInsurance()">
+                        </div>
+                    </section>
+
+                    <section class="col-lg-6 col-md-12">
+                        <div class="preview mt-3">
+                            <table class="table">
+                                <thead>
+                                    <tr class="text-light">
+                                        <th colspan="4" class="parcel-preview estafeta text-center">ESTAFETA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <th class="text-light estafeta">Valor Asegurado</th>
+                                        <td class="text-light estafeta insurance-value-preview">$0</td>
+                                        <th class="text-light estafeta">Seguro</th>
+                                        <td class="text-light estafeta insurance-preview">$0</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+                <!-- Row end -->
+
+            </div>
+            <!-- Card body end -->
+        </div>
+        <!-- Card end -->
+
+    </div>
+    <!-- Container end -->
+
+</body>
+</html>

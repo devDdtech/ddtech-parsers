@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DD Tech Address Generator</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+        integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="assets/css/shared.css">
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+        integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+        crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+        integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+        crossorigin="anonymous"></script>
+
+    <script src="assets/js/fontawesome/fontawesome.min.js"></script>
+    <script src="assets/js/fontawesome/solid.min.js"></script>
+
+    <script src="assets/js/shared.js"></script>
+    <script src="assets/js/monitor.js"></script>
+
+    <script type="text/javascript">
+        let addresses = {};
+        let currentAddress = {};
+        let processedAddresses = '';
+        let lastAddressRemoved = null;
+
+        $(document).ready(function() {
+            $('#gmail_address').focus();
+
+            if (!window.localStorage.getItem('addresses'))
+                window.localStorage.setItem('addresses', JSON.stringify({}))
+
+            addresses = JSON.parse(window.localStorage.getItem('addresses'));
+            updateCounter(addresses);
+
+            Object.getOwnPropertyNames(addresses).forEach(addressKey => {
+                $('.addresses-container').append(
+                    addressToHtml(addresses[addressKey], addressKey)
+                );
+            });
+        });
+
+        function addAddress() {
+            const errors = validateData(currentAddress);
+            if (errors.length > 0) {
+                console.log('got some errors', errors);
+                bootstrapAlert({errors: errors, type: 'warning'}); return;
+            }
+
+            const addressKey = generateHashId();
+            addresses[addressKey] = currentAddress;
+            updateLocalStorageAddresses();
+
+            $('.addresses-container').prepend(addressToHtml(currentAddress, addressKey));
+
+            const msg = `
+                El domicilio <strong>${currentAddress.shortName}</strong>
+                del cliente <strong>${currentAddress.client}</strong>
+                se agregó a la lista de direcciones por procesar`;
+            bootstrapAlert({ msg: msg, icon: 'flag', type: 'success' });
+            cleanFields();
+            updateCounter(addresses);
+            $('#gmail_address').focus();
+
+            if (Object.getOwnPropertyNames(addresses).length == 99)
+                processAddresses();
+        }
+
+        function addressDataToObject(shortName, addressData) {
+            let obj = { shortName: shortName, street2: '', businessName: '', tel2: '' };
+
+            if (!addressData)
+                return obj; // return now if there is no more data to process
+
+            obj = completeObjFromGmailAddress(obj, addressData);
+            obj = refineAddressData(obj);
+
+            return obj;
+        }
+
+        function addressToHtml(address, addressKey) {
+            return `
+                <p class="address-${addressKey} border rounded p-2">
+                    <button type="button" class="btn btn-danger mr-3"
+                        onclick="removeAddress('${addressKey}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <strong>${address.shortName}</strong> | ${address.client}
+                </p>
+            `;
+        }
+
+        function addressToText(address) {
+            let addressInTextFormat = `${address.shortName}|Ventas|${address.client}|${address.email}||mx|${address.businessName}|${address.street}|${address.street2}|${address.colony}|${address.zc}|${address.tel1}|${address.tel2}|${address.state}|${address.city}\n`;
+
+            return addressInTextFormat;
+        }
+
+        function buildPreview() {
+            let preview = `<h5><strong>Información del cliente</strong></h5>`;
+            let lineBreaks, maxlength;
+
+            currentAddressAttrs().forEach(attr => {
+                if (attr == 'number')
+                    return; // skip number
+
+                lineBreaks = ['email', 'state'].includes(attr) ? '<br><br>' : '<br>';
+                maxlength = ['businessName', 'colony'].includes(attr) ? 50 : 30;
+
+                preview += `
+                    <div>
+                        <strong class="preview-label" onclick="editCurrentAddressAttr('${attr}', ${maxlength})">
+                            ${translatedAttrs()[attr]}:
+                        </strong>
+                        <span class="address-${attr}-preview preview-label"
+                            onclick="editCurrentAddressAttr('${attr}', ${maxlength})">
+                            ${currentAddress[attr]}
+                        </span>${lineBreaks}
+                        <span class="address-${attr}-edit-box"></span>
+                    </div>
+                `;
+            });
+
+            return preview;
+        }
+
+        function cleanAddresses() {
+            addresses = {};
+            updateLocalStorageAddresses();
+            $('.addresses-container').html('');
+            updateCounter(addresses);
+        }
+
+        function cleanAll() {
+            cleanFields();
+            cleanAddresses();
+        }
+
+        function cleanFields() {
+            $('#short_name').val('');
+            $('#gmail_address').val('');
+            $('#street_2').val('');
+            $('#business_name').val('');
+
+            currentAddress = {};
+            $('.address-preview').html('');
+            $('#gmail_address').focus();
+        }
+
+        function closeEditBox(attr, event = null) {
+            if (event) {
+                if (event.keyCode == 13)
+                    $(`.address-${attr}-edit-box`).html(''); // close on enter
+            } else {
+                $(`.address-${attr}-edit-box`).html('');
+            }
+        }
+
+        function completeObjFromGmailAddress(obj, addressData) {
+            obj.shortName = addressData.match(/Pedido: #[\d]+/g)[0].replace('Pedido: #', '');
+
+            obj.client = addressData.match(/Cliente(.)*\n/g)[0].replace('Cliente ', '').replace('\n', '');
+            obj.email = addressData.match(/Email(.)*\n/g)[0].replace('Email ', '').replace('\n', '');
+
+            obj.tel1 = addressData.match(/Teléfono[0-9()-\s]+/g)[0].replace('Teléfono', '').replace('\n', '');
+            let tel2Match = addressData.match(/Teléfono #2[0-9()-\s]+/g);
+            if (tel2Match)
+                obj.tel2 = tel2Match[0].replace('Teléfono #2 ', '').replace('\n', '');
+
+            obj.zc = lastMatch(addressData, /C\.P\.(.)*\n/g).replace('C.P. ', '').replace('\n', '');
+            obj.colony = lastMatch(addressData, /Colonia(.)*\n/g).replace('Colonia ', '').replace('\n', '');
+            obj.city = lastMatch(addressData, /Ciudad(.)*\n/g).replace('Ciudad ', '').replace('\n', '');
+            obj.state = lastMatch(addressData, /Ciudad(.)*\n[\s>]*Estado(.)*/g)
+                .replace(/Ciudad(.)*\n[\s>]*Estado[\s]+/g, '').replace('\n', '');
+
+            obj.number = lastMatch(addressData, /Número(.)*\n/g).replace('Número ', '').replace('\n', '');
+            obj.street = lastMatch(addressData, /Calle(.)*\n/g).replace('Calle ', '').replace('\n', '');
+            obj.additionalInfo = addressData.match(/Información adicional(.)*\n/g)[0].replace('Información adicional ', '');
+
+            return obj;
+        }
+
+        function currentAddressAttrs() {
+            return [
+                'shortName',
+                'client',
+                'businessName',
+                'tel1',
+                'tel2',
+                'email',
+                'street',
+                'street2',
+                'number',
+                'zc',
+                'colony',
+                'city',
+                'state'
+            ];
+        }
+
+        function editCurrentAddressAttr(attr, maxlength) {
+            const currentValue = currentAddress[attr];
+
+            $(`.address-${attr}-edit-box`).html(`
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <div class="btn btn-primary close-edit-box-${attr}"
+                            onclick="closeEditBox('${attr}')">Ok!</div>
+                    </div>
+                    <input type="text" name="update_attr_${attr}" id="update_attr_${attr}"
+                        class="form-control" value="${currentValue}" maxlength="${maxlength}"
+                        oninput="updateCurrentAddressAttr(this, '${attr}')"
+                        onkeypress="closeEditBox('${attr}', event);">
+                </div>
+            `);
+
+            $('#update_attr_' + attr).focus();
+        }
+
+        function highlightErrorFields(errorFields) {
+            $('.preview-error').removeClass('preview-error');
+
+            errorFields.forEach(field => {
+                $(`.address-${field}-preview`).parent().addClass('preview-error');
+            });
+        }
+
+        function processAddresses() {
+            const addressKeys = Object.getOwnPropertyNames(addresses);
+            if (addressKeys.length == 0){
+                bootstrapAlert({msg: 'No hay domicilios por procesar'});
+                return;
+            }
+
+            processedAddresses = '';
+            $('.processed-addresses').html(processedAddresses);
+
+            addressKeys.forEach(addressKey => {
+                processedAddresses += addressToText(addresses[addressKey]);
+                $('.processed-addresses').append(`<p>${addressToText(addresses[addressKey])}</p>`);
+            });
+
+            cleanAll();
+
+            $('#ddtech-modal').modal('show');
+            $('.copy-format').focus();
+        }
+
+        function refineAddressData(obj) {
+            Object.getOwnPropertyNames(obj).forEach(attr => {
+                obj[attr] = ['email', 'additionalInfo'].includes(attr) ? obj[attr].toLowerCase() : obj[attr].toUpperCase();
+                obj[attr] = obj[attr].normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "").trim(); // remove accents/diacritics
+                if (attr != 'email')
+                    obj[attr] = obj[attr].replace(/[+|°º()"'\/\\]/g, '');
+            });
+
+            obj.businessName = obj.client; // Set businessName if not present
+
+            if (obj.client.length > 30)
+                obj.client = obj.client.substring(0, 29); // Cut down the name to 30 chars
+
+            obj.street += ` ${obj.number}`;
+
+            if (obj.street.length > 30) {
+                let cutTo = 30;
+                if (obj.street[29] != ' ' && obj.street[30] != ' ') {
+                    cutTo = 28;
+                    while (obj.street[cutTo] != ' ')
+                        cutTo -= 1;
+                }
+
+                obj.street2 = obj.street.substring(cutTo, 999).trim(); // Complete street #2 with chars beyond limit in street #1
+                obj.street = obj.street.substring(0, cutTo); // Limit street #1 chars to no more than 30 chars
+            }
+
+            return obj;
+        }
+
+        function refreshCurrentAddress() {
+            const shortName = $('#short_name').val();
+            const addressData = $('#gmail_address').val();
+
+            try {
+                currentAddress = addressDataToObject(shortName, addressData);
+            } catch (error) {
+                console.log('', error);
+                msg = `Hay un error en el formato de la información, Seleccione en Gmail desde
+                    "Información del Cliente" hasta "Estado Edo (en info de envío)"`;
+                bootstrapAlert({ msg: msg });
+
+                addressKeys = Object.getOwnPropertyNames(currentAddress);
+                addressKeys.forEach(addressKey => {
+                    currentAddress[addressKey] = '';
+                });
+
+                return;
+            }
+
+            return currentAddress;
+        }
+
+        function removeAddress(addressKey) {
+            lastAddressRemoved = addresses[addressKey];
+
+            delete addresses[addressKey];
+            updateLocalStorageAddresses();
+
+            $('.address-' + addressKey).remove();
+            updateCounter(addresses);
+
+            msg = `
+                Se eliminó la dirección ${lastAddressRemoved.shortName}
+                si deseas restaurarla haz click
+                <button class="btn btn-primary" onclick="restoreLastAddressRemoved()">Aquí</button>
+            `;
+            bootstrapAlert({ msg: msg, type: 'warning' })
+        }
+
+        function restoreLastAddressRemoved() {
+            if (!lastAddressRemoved)
+                return;
+
+            currentAddress = lastAddressRemoved;
+            addAddress();
+            lastAddressRemoved = null;
+        }
+
+        function translatedAttrs() {
+            return {
+                'shortName': 'Nombre Corto',
+                'client': 'Cliente',
+                'businessName': 'Razón Social',
+                'tel1': 'Teléfono #1',
+                'tel2': 'Teléfono #2',
+                'email': 'Correo Electrónico',
+                'street': 'Calle #1',
+                'street2': 'Calle #2',
+                'number': 'Número',
+                'zc': 'C.P.',
+                'colony': 'Colonia',
+                'city': 'Ciudad',
+                'state': 'Estado'
+            };
+        }
+
+        function updateCurrentAddressAttr(input, attr) {
+            currentAddress[attr] = input.value.toUpperCase();
+            $(`.address-${attr}-preview`).html(currentAddress[attr]);
+
+            validateData(currentAddress);
+        }
+
+        function updateLocalStorageAddresses() {
+            window.localStorage.setItem('addresses', JSON.stringify(addresses));
+        }
+
+        function updatePreview() {
+            refreshCurrentAddress();
+
+            const previewHolder = $('.address-preview');
+            let preview = buildPreview();
+
+            previewHolder.html(preview);
+            if(currentAddress['additionalInfo'] && currentAddress['additionalInfo'] != 'sin informacion')
+                previewHolder.append(`<div class="additional-info">${currentAddress['additionalInfo']}</div>`);
+
+            validateData(currentAddress);
+        }
+
+        function validateData(address) {
+            let errors = [];
+            let errorFields = [];
+
+            currentAddressAttrs().forEach(attr => {
+                if (['tel1', 'tel2', 'email', 'number', 'street2'].includes(attr))
+                    return; // these are not required
+
+                if (!address[attr])
+                    errors.push(`${translatedAttrs()[attr]} es requerido`);
+            });
+
+            if (address.street && address.street.length > 30) {
+                errors.push('Calle #1 excede los 30 caracteres');
+                errorFields.push('street');
+            }
+            if (address.street2 && address.street2.length > 30) {
+                errors.push('Calle #2 excede los 30 caracteres');
+                errorFields.push('street2');
+            }
+            if (address.street2 && address.street2.length == 1) {
+                errors.push('Calle #2 debe ser mayor a 1 caracter');
+                errorFields.push('street2');
+            }
+            if (address.businessName && address.businessName.length > 50) {
+                errors.push('Razón Social excede los 50 caracteres');
+                errorFields.push('businessName');
+            }
+            if (address.colony && address.colony.length > 40) {
+                errors.push('Colonia excede los 40 caracteres');
+                errorFields.push('colony');
+            }
+
+            highlightErrorFields(errorFields);
+            return errors;
+        }
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <a class="navbar-brand" href="https://johnloza.github.io/ddtech-parsers/">
+            DD TECH ESTAFETA processor
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/">
+                        Domicilios Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/guides-generator.html">
+                        Guías Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/order-excel-parser.html">
+                        Bitácora de guías
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/insurance-calculator.html">
+                        Calculadora de Seguros
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <!-- Navbar end -->
+
+    <div class="container">
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Generador de Domicilios para ESTAFETA
+                    <small><span class="counter badge badge-primary">0</span></small>
+                    <a href="#" class="text-secondary" data-toggle="modal" data-target="#monitor-modal">
+                        <i class="fas fa-cogs float-right"></i>
+                    </a>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="alerts-container mt-3"></div>
+                <div class="row">
+                    <section class="col-lg-6 col-md-12">
+                        <div class="form-group">
+                            <label for="gmail_address">Domicilio Gmail</label>
+                            <textarea name="gmail_address" id="gmail_address" cols="30" rows="10" class="form-control"
+                                oninput="updatePreview()" placeholder="* Domicilio Gmail ---" data-monitor-feed=true></textarea>
+                        </div>
+                    </section>
+
+                    <section class="col-lg-6 col-md-12">
+                        <div class="address-preview mt-3"></div>
+                    </section>
+                </div>
+                <!-- Row end -->
+
+            </div>
+            <!-- Card body end -->
+
+            <div class="card-footer">
+                <button class="btn btn-primary mr-3" onclick="addAddress()">Agregar</button>
+                <button class="btn btn-success mr-3" onclick="processAddresses()">Generar formato</button>
+                <button class="btn btn-info mr-3" onclick="$('#ddtech-modal').modal('show')">Último Procesado</button>
+                <button class="btn btn-secondary mr-3" onclick="cleanFields()">Limpiar</button>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div class="card mt-3 mb-5">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Domicilios por procesar
+                    <small><span class="counter badge badge-primary">0</span></small>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="text-center">
+                    <button class="btn btn-danger mb-3" onclick="cleanAll()">
+                        Limpiar direcciones
+                    </button>
+                </div>
+                <div class="addresses-container"></div>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div id="ddtech-modal" class="modal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-light">
+                        <h5 class="modal-title">Domicilios procesados</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="processed-container">
+                            <code class="processed-addresses">
+                                Aquí no hay nada :/
+                            </code>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary copy-format" data-dismiss="modal"
+                            onclick="copyToClipboard(processedAddresses); $('#gmail_address').focus();">
+                            Copear y cerrar
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="monitor-modal" class="modal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-light">
+                        <h5 class="modal-title">Configuración del monitor</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-dismiss="modal"
+                            onclick="setMonitorValues();">
+                            Guardar
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="appendField();">
+                            Añadir campo
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <!-- Container end -->
+
+</body>
+</html>

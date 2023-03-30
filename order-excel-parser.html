@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DD Tech Order Excel Parser</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+        integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <link rel="stylesheet" href="assets/css/shared.css">
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+        integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+        crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+        integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+        crossorigin="anonymous"></script>
+
+    <script src="assets/js/fontawesome/fontawesome.min.js"></script>
+    <script src="assets/js/fontawesome/solid.min.js"></script>
+
+    <script src="assets/js/shared.js"></script>
+    <script src="assets/js/monitor.js"></script>
+
+    <script type="text/javascript">
+        let orders = {};
+        let currentOrder = {};
+        let lastOrderRemoved = null;
+
+        $(document).ready(function() {
+            $('#gmail_order').focus();
+
+            if (!window.localStorage.getItem('orders'))
+                window.localStorage.setItem('orders', JSON.stringify({}))
+
+            orders = JSON.parse(window.localStorage.getItem('orders'));
+            updateCounter(orders);
+
+            Object.getOwnPropertyNames(orders).forEach(orderKey => {
+                $('.orders-container').append(
+                    orderToHtml(orders[orderKey], orderKey)
+                );
+            });
+
+            // submit form on enter
+            $("input").on("keydown", function(event) {
+                if (event.keyCode === 13) {
+                if (event.shiftKey)
+                    return;
+                event.preventDefault();
+                $('.add-btn').click();
+                }
+            });
+            // submit form on enter
+        });
+
+        function addOrder() {
+            const errors = validateData(currentOrder);
+            if (errors.length > 0) {
+                console.log('got some errors', errors);
+                bootstrapAlert({errors: errors, type: 'warning'}); return;
+            }
+
+            const orderKey = generateHashId();
+            orders[orderKey] = currentOrder;
+            updateLocalStorageOrders();
+
+            $('.orders-container').prepend(orderToHtml(currentOrder, orderKey));
+
+            const msg = `
+                La orden <strong>${currentOrder.orderId}</strong>
+                del cliente <strong>${currentOrder.client}</strong>
+                se agregó a la lista de ordenes por procesar`;
+            bootstrapAlert({ msg: msg, icon: 'flag', type: 'success' });
+            cleanFields();
+            updateCounter(orders);
+            $('#gmail_order').focus();
+
+            if (Object.getOwnPropertyNames(orders).length == 99)
+                processOrders();
+        }
+
+        function cleanOrders() {
+            orders = {};
+            updateLocalStorageOrders();
+            $('.orders-container').html('');
+            updateCounter(orders);
+        }
+
+        function cleanAll() {
+            cleanFields();
+            cleanOrders();
+
+            $('#processor').val('');
+            $('#date').val('');
+            $('#bank').val('');
+        }
+
+        function cleanFields() {
+            $('#gmail_order').val('');
+            $('#payment_type').val('');
+            $('#movement').val('');
+            $('#type').val('');
+            $('#guide').val('');
+
+            currentOrder = newOrderObject();
+            $('.order-preview').html('');
+
+            $('#gmail_order').focus();
+        }
+
+        function closeEditBox(attr, event = null) {
+            if (event) {
+                if (event.keyCode == 13)
+                    $(`.order-${attr}-edit-box`).html(''); // close on enter
+            } else {
+                $(`.order-${attr}-edit-box`).html('');
+            }
+        }
+
+        function completeObjFromGmailOrder(obj, orderData) {
+            obj.orderId = orderData.match(/Pedido: #[\d]+/g)[0].replace('Pedido: #', '');
+
+            obj.client = orderData.match(/Cliente(.)+\n/g)[0].replace('Cliente ', '').replace('\n', '');
+            obj.email = orderData.match(/Email(.)+\n/g)[0].replace('Email ', '').replace('\n', '');
+
+            obj.parcel = orderData.match(/Paquetería(.)+\n/g)[0].replace('Paquetería ', '').replace('\n', '');
+
+            match = orderData.match(/Seguro de envío(.)+\n/g);
+            obj.insuranceCost = !match ? 'NO' : match[0].replace('Seguro de envío ', '').replace('\n', '');
+
+            obj.total = orderData.match(/Total de pedido con envío(.)+\n/g)[0].replace('Total de pedido con envío ', '').replace('\n', '');
+
+            match = orderData.match(/Factura(.)+\n/g);
+            if (match) {
+                obj.invoice = match[0].includes('N') ? 'N' : 'F';
+            } else {
+                obj.invoice = 'N';
+            }
+
+            const city = lastMatch(orderData, /Ciudad(.)+\n/g).replace('Ciudad ', '').replace('\n', '');
+            const state = lastMatch(orderData, /Ciudad(.)+\n[\s>]*Estado(.)+/g)
+                .replace(/Ciudad(.)+\n[\s>]*Estado[\s]+/g, '').replace('\n', '');
+            obj.destination = `${city}, ${state}`;
+
+            return obj;
+        }
+
+        function copyElementContents(elementId) {
+            let el = document.getElementById(elementId);
+            let body = document.body, range, sel;
+
+            if (document.createRange && window.getSelection) {
+                range = document.createRange();
+                sel = window.getSelection();
+                sel.removeAllRanges();
+                try {
+                    range.selectNodeContents(el);
+                    sel.addRange(range);
+                } catch (e) {
+                    range.selectNode(el);
+                    sel.addRange(range);
+                }
+            } else if (body.createTextRange) {
+                range = body.createTextRange();
+                range.moveToElementText(el);
+                range.select();
+            }
+
+            document.execCommand('copy');
+            sel.removeAllRanges();
+
+            bootstrapAlert({msg: 'Elemento copiado al PP', type: 'primary'})
+        }
+
+        function editCurrentOrderAttr(attr) {
+            const currentValue = currentOrder[attr];
+
+            $(`.order-${attr}-edit-box`).html(`
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <div class="btn btn-primary close-edit-box-${attr}"
+                            onclick="closeEditBox('${attr}')">Ok!</div>
+                    </div>
+                    <input type="text" name="update_attr_${attr}" id="update_attr_${attr}"
+                        class="form-control" value="${currentValue}"
+                        onkeyup="updateCurrentOrderAttr(this, '${attr}')"
+                        onkeypress="closeEditBox('${attr}', event);">
+                </div>
+            `);
+
+            $('#update_attr_' + attr).focus();
+        }
+
+        function newOrderObject() {
+            return {
+                orderId: '',
+                client: '',
+                email: '',
+                destination: '',
+                total: '',
+                parcel: '',
+                insuranceCost: '',
+                invoice: '',
+                processor: '',
+                date: '',
+                bank: '',
+                paymentType: '',
+                movement: '',
+                type: '',
+                guide: ''
+            }
+        }
+
+        function orderDataToObject(orderData) {
+            obj = newOrderObject();
+
+            obj.processor = $('#processor').val();
+            obj.paymentType = $('#payment_type').val();
+            obj.date = $('#date').val();
+            obj.bank = $('#bank').val();
+            obj.movement = $('#movement').val();
+            obj.type = $('#type').val();
+            obj.guide = $('#guide').val();
+
+            if (!orderData)
+                return obj; // return now if there is no data to process
+
+            obj = completeObjFromGmailOrder(obj, orderData);
+            obj = refineOrderData(obj);
+
+            return obj;
+        }
+
+        function orderToHtml(order, orderKey) {
+            return `
+                <p class="order-${orderKey} border rounded p-2">
+                    <button type="button" class="btn btn-danger mr-3" onclick="removeOrder('${orderKey}')">
+                        <i class="fas fa-times fa-lg"></i>
+                    </button>
+                    <strong>${order.orderId}</strong> | ${order.client} |
+                    ${order.processor} | ${order.date} | ${order.bank}
+                </p>
+            `;
+        }
+
+        function orderToTableRow(order) {
+            return `
+                <tr>
+                    <td>${order.client}</td>
+                    <td></td>
+                    <td>${order.invoice}</td>
+                    <td>${order.paymentType}</td>
+                    <td>${order.date}</td>
+                    <td>${order.bank}</td>
+                    <td>${order.movement}</td>
+                    <td>${order.total}</td>
+                    <td>${order.destination}</td>
+                    <td>${order.processor}</td>
+                    <td>${order.orderId}</td>
+                    <td>${order.insuranceCost}</td>
+                    <td>${order.type}</td>
+                    <td>${order.guide}</td>
+                    <td>${order.parcel}</td>
+                    <td></td>
+                    <td>${order.email}</td>
+                </tr>
+            `;
+        }
+
+        function processOrders() {
+            const orderKeys = Object.getOwnPropertyNames(orders);
+            if (orderKeys.length == 0){
+                bootstrapAlert({msg: 'No hay domicilios por procesar'});
+                return;
+            }
+
+            $('#processed_orders').html('');
+
+            orderKeys.forEach((orderKey, indx, array) => {
+                $('#processed_orders').append(orderToTableRow(orders[orderKey]));
+            });
+
+            cleanAll();
+
+            $('#ddtech-modal').modal('show');
+            $('.copy-format').focus();
+        }
+
+        function refineOrderData(obj){
+            Object.getOwnPropertyNames(obj).forEach(attr => {
+                obj[attr] = attr == 'email' ? obj[attr].toLowerCase() : obj[attr].toUpperCase();
+            });
+
+            obj.total = obj.total.replace('$', '');
+
+            if (obj.parcel.includes('GUADALAJARA'))
+                obj.parcel = obj.destination.includes('JALISCO') ? 'ZMG' : 'ESTAFETA';
+            else if (obj.parcel.includes('GRATIS') || obj.parcel.includes('AÉREO'))
+                obj.parcel = 'ESTAFETA';
+
+            return obj;
+        }
+
+        function refreshCurrentOrder() {
+            const orderData = $('#gmail_order').val();
+
+            try {
+                currentOrder = orderDataToObject(orderData);
+            } catch (error) {
+                console.error(error);
+                bootstrapAlert({ msg: 'Hay un error en el formato de la información', dismissDelay: 30000 });
+
+                orderKeys = Object.getOwnPropertyNames(currentOrder);
+                orderKeys.forEach(orderKey => {
+                    currentOrder[orderKey] = '';
+                });
+
+                return;
+            }
+
+            return currentOrder;
+        }
+
+        function removeOrder(orderKey) {
+            lastOrderRemoved = orders[orderKey];
+
+            delete orders[orderKey];
+            updateLocalStorageOrders();
+
+            $('.order-' + orderKey).remove();
+            updateCounter(orders);
+
+            msg = `
+                Se eliminó la orden ${lastOrderRemoved.shortName}
+                si deseas restaurarla haz click
+                <button class="btn btn-primary" onclick="restoreLastOrderRemoved()">Aquí</button>
+            `;
+            bootstrapAlert({ msg: msg, type: 'warning' })
+        }
+
+        function restoreLastOrderRemoved() {
+            if (!lastOrderRemoved)
+                return;
+
+            currentOrder = lastOrderRemoved;
+            addOrder();
+            lastOrderRemoved = null;
+        }
+
+        function translatedAttrs() {
+            return {
+                orderId: 'Pedido',
+                client: 'Cliente',
+                email: 'email',
+                parcel: 'Paquetería',
+                insuranceCost: 'Seguro',
+                total: 'Total',
+                invoice: 'Factura',
+                destination: 'Destino',
+                processor: 'Procesó',
+                paymentType: 'Forma de pago',
+                date: 'Fecha',
+                bank: 'Banco',
+                movement: 'Movimiento',
+                type: 'Tipo',
+                guide: 'Guía'
+            };
+        }
+
+        function updateCurrentOrderAttr(input, attr) {
+            currentOrder[attr] = input.value.toUpperCase();
+            $(`.order-${attr}-preview`).html(currentOrder[attr]);
+
+            if (attr == "parcel") {
+                $('.order-parcel-preview').removeClass('estafeta');
+                $('.order-parcel-preview').removeClass('fedex');
+                $('.order-parcel-preview').removeClass('zmg');
+                $('.order-parcel-preview').removeClass('dhl');
+
+                $('.order-parcel-preview').addClass(currentOrder.parcel.toLowerCase());
+            }
+
+            validateData(currentOrder);
+        }
+
+        function updateLocalStorageOrders() {
+            window.localStorage.setItem('orders', JSON.stringify(orders));
+        }
+
+        function updatePreview() {
+            refreshCurrentOrder();
+
+            const previewHolder = $('.order-preview');
+            let preview = `
+                <h5><strong>Información de la órden</strong></h5>
+            `;
+
+            let extraSpace = '';
+            Object.getOwnPropertyNames(currentOrder).forEach(attr => {
+                extraSpace = ['destination', 'total', 'invoice'].includes(attr) ? '<br>' : '';
+
+                preview += `
+                    <div>
+                        <strong class="preview-label" onclick="editCurrentOrderAttr('${attr}')">
+                            ${translatedAttrs()[attr]}:
+                        </strong>
+                        <span class="order-${attr}-preview preview-label"
+                            onclick="editCurrentOrderAttr('${attr}')">
+                            ${currentOrder[attr]}
+                        </span><br>
+                        <span class="order-${attr}-edit-box"></span>
+                        ${extraSpace}
+                    </div>
+                `;
+            });
+
+            previewHolder.html(preview);
+
+            $('.order-parcel-preview').removeClass('estafeta');
+            $('.order-parcel-preview').removeClass('fedex');
+            $('.order-parcel-preview').removeClass('zmg');
+            $('.order-parcel-preview').removeClass('dhl');
+
+            $('.order-parcel-preview').addClass(currentOrder.parcel.toLowerCase());
+
+            validateData(currentOrder);
+        }
+
+        function validateData(order) {
+            let errors = [];
+            const required = [
+                'orderId',
+                'client',
+                'email',
+                'parcel',
+                'insuranceCost',
+                'total',
+                'invoice',
+                'destination',
+                'processor',
+                'date',
+                'bank'
+            ];
+
+            required.forEach(attr => {
+                if (!order[attr])
+                    errors.push(`${translatedAttrs()[attr]} es requerido`);
+            });
+
+            return errors;
+        }
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <a class="navbar-brand" href="https://johnloza.github.io/ddtech-parsers/">
+            DD TECH Address Generator
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/">
+                        Domicilios Estafeta
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/guides-generator.html">
+                        Guías Estafeta
+                    </a>
+                </li>
+                <li class="nav-item active">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/order-excel-parser.html">
+                        Bitácora de guías
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://johnloza.github.io/ddtech-parsers/insurance-calculator.html">
+                        Calculadora de Seguros
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <!-- Navbar end -->
+
+    <div class="container">
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Transformador de Pedidos a tabla
+                    <small><span class="counter badge badge-primary">0</span></small>
+                    <a href="#" class="text-secondary" data-toggle="modal" data-target="#monitor-modal">
+                        <i class="fas fa-cogs float-right"></i>
+                    </a>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="alerts-container mt-3"></div>
+                <div class="row">
+                    <section class="col-lg-6 col-md-12">
+                        <div class="form-group">
+                            <label for="gmail_order" class="sr-only">Domicilio Gmail</label>
+                            <textarea name="gmail_order" id="gmail_order" cols="30" rows="1" class="form-control"
+                                onchange="updatePreview()" placeholder="* Domicilio Gmail" data-monitor-feed=true></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="processor" class="sr-only">Procesó</label>
+                            <input type="text" list="processors" name="processor" id="processor" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'processor')" placeholder="* Procesó">
+                            <datalist id="processors">
+                                <option value="ALEXIS"/>
+                                <option value="BRENDA"/>
+                                <option value="CYNTHIA"/>
+                                <option value="FANNY"/>
+                                <option value="GRIS"/>
+                                <option value="JESSY"/>
+                                <option value="JOHNNY"/>
+                                <option value="MIRY"/>
+                                <option value="LILIA"/>
+                                <option value="ROCIO"/>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="date" class="sr-only">Fecha</label>
+                            <input type="text" name="date" id="date" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'date')" placeholder="* Fecha">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="bank" class="sr-only">Banco</label>
+                            <input type="text" list="banks" name="bank" id="bank" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'bank')" placeholder="* Banco">
+                            <datalist id="banks">
+                                <option value="BC"/>
+                                <option value="BCE"/>
+                                <option value="BT"/>
+                                <option value="ST"/>
+                                <option value="MP"/>
+                                <option value="PAYPAL"/>
+                                <option value="DEBEMOS"/>
+                                <option value="GARANTIA"/>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="payment_type" class="sr-only">Forma de pago</label>
+                            <input type="text" list="payment_types" name="payment_type" id="payment_type" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'paymentType')" placeholder="Forma de pago (opcional)">
+                            <datalist id="payment_types">
+                                <option value="DEP EFEC"/>
+                                <option value="TRANSF"/>
+                                <option value="PAG OF"/>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="movement" class="sr-only">Movimiento</label>
+                            <input type="text" name="movement" id="movement" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'movement')" placeholder="Movimiento (opcional)">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="type" class="sr-only">Tipo</label>
+                            <input type="text" list="types" name="type" id="type" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'type')" placeholder="Tipo (opcional)">
+                            <datalist id="types">
+                                <option value="D/S"/>
+                                <option value="30K"/>
+                                <option value="35K"/>
+                                <option value="40K"/>
+                                <option value="45K"/>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="guide" class="sr-only">Guía</label>
+                            <input type="text" name="guide" id="guide" class="form-control"
+                                onkeyup="updateCurrentOrderAttr(this, 'guide')" placeholder="Guía (opcional)">
+                        </div>
+                    </section>
+
+                    <section class="col-lg-6 col-md-12">
+                        <div class="order-preview mt-3"></div>
+                    </section>
+                </div>
+                <!-- Row end -->
+
+            </div>
+            <!-- Card body end -->
+
+            <div class="card-footer">
+                <button class="add-btn btn btn-primary mr-3" onclick="addOrder()">Agregar</button>
+                <button class="btn btn-success mr-3" onclick="processOrders()">Generar formato</button>
+                <button class="btn btn-info mr-3" onclick="$('#ddtech-modal').modal('show')">Último Procesado</button>
+                <button class="btn btn-secondary mr-3" onclick="cleanFields()">Limpiar</button>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div class="card mt-3 mb-5">
+            <div class="card-header">
+                <h3 class="text-center card-title">
+                    Pedidos por procesar
+                    <small><span class="counter badge badge-primary">0</span></small>
+                </h3>
+            </div>
+
+            <div class="card-body">
+                <div class="text-center">
+                    <button class="btn btn-danger mb-3" onclick="cleanAll()">
+                        Limpiar pedidos
+                    </button>
+                </div>
+                <div class="orders-container"></div>
+            </div>
+        </div>
+        <!-- Card end -->
+
+        <div id="ddtech-modal" class="modal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-light">
+                        <h5 class="modal-title">Pedidos procesados</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="processed-container">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <td>Cliente</td>
+                                        <td>Notas</td>
+                                        <td>Factura</td>
+                                        <td>Tipo de Pago</td>
+                                        <td>Fecha</td>
+                                        <td>Banco</td>
+                                        <td>Movimiento</td>
+                                        <td>Total</td>
+                                        <td>Destino</td>
+                                        <td>Procesó</td>
+                                        <td>Pedido</td>
+                                        <td>Seguro</td>
+                                        <td>Tipo</td>
+                                        <td>Guía</td>
+                                        <td>Paquetería</td>
+                                        <td>Fecha Salida</td>
+                                        <td>Correo 1</td>
+                                    </tr>
+                                </thead>
+                                <tbody id="processed_orders">
+                                    <tr><td>Nada por aquí :/</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary copy-format" data-dismiss="modal"
+                            onclick="copyElementContents('processed_orders'); $('#gmail_order').focus();">
+                            Copear y cerrar
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="monitor-modal" class="modal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-light">
+                        <h5 class="modal-title">Configuración del monitor</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-dismiss="modal"
+                            onclick="setMonitorValues();">
+                            Guardar
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="appendField();">
+                            Añadir campo
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <!-- Container end -->
+</body>
+</html>
