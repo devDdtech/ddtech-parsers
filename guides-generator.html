@@ -132,7 +132,7 @@
         }
 
         function guideToText(guide) {
-            const guideInTextFormat = `${guide.serviceCode}|${guide.weight}.0|P||${guide.declaredValue}|${guide.insurance}|ACCESORIOS DE COMPUTO|${guide.insuranceDescription}|ACCESORIOS||${guide.originShortName}|${guide.destShortName}|NOR||||1`;
+            const guideInTextFormat = `${guide.serviceCode}|${guide.weight}.0|P||${guide.declaredValue}|${guide.insurance}|PRODUCTO|${guide.insuranceDescription}|ACCESORIOS||${guide.originShortName}|${guide.destShortName}|NOR||||1`;
 
             return guideInTextFormat;
         }
@@ -202,7 +202,7 @@
             };
 
             if (currentGuide['originShortName'].length == 0)
-                currentGuide['originShortName'] = 'DDTECH';
+                currentGuide['originShortName'] = 'DD';
             currentGuide['insurance'] = currentGuide['declaredValue'] ? 'V' : 'F';
         }
 
