@@ -77,7 +77,7 @@
             $('.guides-container').prepend(guideToHtml(guide, id));
 
             const msg = `
-                La guía para <strong>${guide.destShortName}</strong>
+                La guía para <strong>${guide.destinationAddress}</strong>
                 se agregó a la lista de guías por procesar`;
             bootstrapAlert({ msg: msg, icon: 'flag', type: 'success' });
             cleanFields();
@@ -94,13 +94,16 @@
         }
 
         function cleanFields() {
-            $('#origin_short_name').val('');
-            $('#dest_short_name').val('');
-            $('#weight').val('1');
-            $('#declared_value').val('');
-            $('#insurance_description').val('');
-            $('#aerial').prop('checked', false);
-
+            $('#service_modality').val('');
+            $('#weight').val('');
+            $('#long').val('');
+			$('#width').val('');
+			$('#high').val('');
+			$('#item_reference').val('');
+			$('#source_address').val('');
+			$('#destination_address').val('');
+			$('#guides_cuantity').val('');
+			
             currentGuide = {};
         }
 
@@ -121,8 +124,7 @@
                     <button type="button" class="btn btn-danger mr-3" onclick="removeGuide('${guideKey}')">
                         <i class="fas fa-times fa-lg"></i>
                     </button>
-                    Origen <strong>${guide.originShortName}</strong> |
-                    Destino <strong>${guide.destShortName}</strong> |
+                    Destino <strong>${guide.destinationAddress}</strong> |
                     ${guide.weight}Kg |
                     Asegurado ${guide.insurance} |
                     Valor declarado: ${guide.declaredValue} |
@@ -132,24 +134,22 @@
         }
 
         function guideToText(guide) {
-            const guideInTextFormat = `${guide.serviceCode}|${guide.weight}.0|P||${guide.declaredValue}|${guide.insurance}|PRODUCTO|${guide.insuranceDescription}|ACCESORIOS||${guide.originShortName}|${guide.destShortName}|NOR||||1`;
-
+            const guideInTextFormat = `5898550||${guide.serviceModality}|PQT|${guide.weight}|${guide.long}|${guide.width}|${guide.high}|F||ACCESORIOS|PRODUCTO|${guide.itemReference}||DD|${guide.destinationAddress}||${guide.guidesCuantity}|| `;
             return guideInTextFormat;
         }
 
         function processGuides() {
             const guideKeys = Object.getOwnPropertyNames(guides);
             if (guideKeys.length == 0){
-                bootstrapAlert({msg: 'No hay domicilios por procesar'});
+                bootstrapAlert({msg: 'No hay guias por procesar'});
                 return;
             }
 
-            processedGuides = '#5898550|T||ZEBRA|PDF\n';
             fileName = '';
             $('.processed-guides').html(`<p>${processedGuides}</p>`);
 
             guideKeys.forEach((guideKey, indx, array) => {
-                fileName += `#${guides[guideKey].destShortName} `;
+                fileName += `#${guides[guideKey].destinationAddress} `;
                 processedGuides += guideToText(guides[guideKey]);
                 $('.processed-guides').append(`<p>${guideToText(guides[guideKey])}</p>`);
                 if (indx < array.length - 1) // Don't add a new line if it's the last one
@@ -174,7 +174,7 @@
             updateCounter(guides);
 
             msg = `
-                Se eliminó la dirección ${lastGuideRemoved.destShortName}
+                Se eliminó la dirección ${lastGuideRemoved.destinationAddress}
                 si deseas restaurarla haz click
                 <button class="btn btn-primary" onclick="restoreLastGuideRemoved()">Aquí</button>
             `;
@@ -193,17 +193,16 @@
 
         function updateCurrentGuide() {
             currentGuide = {
-                serviceCode: $('#service_code').val(),
-                destShortName: $('#dest_short_name').val().toUpperCase(),
-                originShortName: $('#origin_short_name').val().toUpperCase(),
-                weight: $('#weight').val(),
-                declaredValue: $('#declared_value').val(),
-                insuranceDescription: $('#insurance_description').val().toUpperCase()
+				serviceModality: $('#service_modality').val(),
+				weight: $('#weight').val(),
+				long: $('#long').val(),
+				width: $('#width').val(),
+				high: $('#high').val(),
+				itemReference: $('#item_reference').val().toUpperCase(),
+				destinationAddress: $('#destination_address').val().toUpperCase(),
+				guidesCuantity: $('#guides_cuantity').val(),
             };
 
-            if (currentGuide['originShortName'].length == 0)
-                currentGuide['originShortName'] = 'DD';
-            currentGuide['insurance'] = currentGuide['declaredValue'] ? 'V' : 'F';
         }
 
         function updateLocalStorageGuides() {
@@ -212,9 +211,15 @@
 
         function validateGuide(guide) {
             let errors = [];
-            if (!guide.destShortName)
-                errors.push('Se requiere un nombre corto');
-
+            if (!guide.serviceModality)
+                errors.push('El campo Servicio Modalidad es requerido');
+            if (!guide.itemReference)
+                errors.push('El campo Referencia del Item es requerido');
+            if (!guide.destinationAddress)
+                errors.push('El campo Alias de Dirección Destino es requerido');
+            if (!guide.guidesCuantity)
+                errors.push('El campo Cantidad de Guías es requerido');
+            				
             if (guide.weight) {
                 if (guide.weight > 99)
                     errors.push('El peso no puede exceder los 99 Kg');
@@ -227,10 +232,31 @@
             } else {
                 errors.push('Se requiere el peso del paquete');
             }
-
-            if ((guide.declaredValue && !guide.insuranceDescription) || (guide.insuranceDescription && !guide.declaredValue))
-                errors.push('Los datos para asegurar están incompletos se necesita la descripción así como el valor declarado');
-
+            if (guide.long) {
+                if (guide.long < 1)
+                    errors.push('El largo debe ser de al menos 1 cm');
+                if (guide.long.indexOf('.') != -1)
+                    errors.push('El largo no debe contener decimales');
+            } else {
+                errors.push('Se requiere el largo del paquete');
+            }
+			if (guide.width) {
+                if (guide.width < 1)
+                    errors.push('El ancho debe ser de al menos 1 cm');
+                if (guide.width.indexOf('.') != -1)
+                    errors.push('El ancho no debe contener decimales');
+            } else {
+                errors.push('Se requiere el ancho del paquete');
+            }
+			if (guide.high) {
+                if (guide.high < 1)
+                    errors.push('El alto debe ser de al menos 1 cm');
+                if (guide.high.indexOf('.') != -1)
+                    errors.push('El alto no debe contener decimales');
+            } else {
+                errors.push('Se requiere el alto del paquete');
+            }
+           
             return errors;
         }
     </script>
@@ -285,7 +311,8 @@
                 <div class="alerts-container mt-3"></div>
                 <div class="row">
                     <section class="col-lg-6 col-md-12">
-                        <div class="form-group mb-2">
+                        <!--
+						<div class="form-group mb-2">
                             <label for="service_code">Código de servicio</label>
                             <select name="service_code" id="service_code" class="form-control"
                                 onchange="updateCurrentGuide()">
@@ -295,6 +322,114 @@
                         </div>
 
                         <div class="form-group mb-2">
+                            <label for="cost_center">Centro de Costos</label>
+                            <input type="text" name="cost_center" id="cost_center" class="form-control"
+                                onkeyup="updateCurrentGuide()">
+                        </div>-->
+						
+                        <div class="form-group mb-2">
+                            <label for="service_modality">Servicio Modalidad*</label>
+                            <select name="service_modality" id="service_modality" class="form-control"
+                                onchange="updateCurrentGuide()">
+                                <option value="70">Terrestre Por Consumo</option>
+                                <option value="78">Terrestre Prepagado</option>
+                            </select>
+                        </div>
+						<!--
+                        <div class="form-group mb-2">
+                            <label for="packaging_type">Tipo de Empaque*</label>
+                            <input type="text" name="packaging_type" id="packaging_type" class="form-control"
+                                maxlength="3" onkeyup="updateCurrentGuide()">
+                        </div>-->
+						
+                        <div class="form-group mb-2">
+                            <label for="weight">Peso del Envío*</label>
+                            <input type="number" name="weight" id="weight" class="form-control"
+                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
+                        </div>
+						
+                        <div class="form-group mb-2">
+                            <label for="long">Largo*</label>
+                            <input type="number" name="long" id="long" class="form-control"
+                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
+                        </div>
+						
+                        <div class="form-group mb-2">
+                            <label for="width">Ancho*</label>
+                            <input type="number" name="width" id="width" class="form-control"
+                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
+                        </div>
+						
+                        <div class="form-group mb-2">
+                            <label for="high">Alto*</label>
+                            <input type="number" name="high" id="high" class="form-control"
+                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
+                        </div>
+						<!--
+                        <div class="form-group mb-2">
+                            <label for="insurance">Seguro</label>
+                            <input type="text" name="insurance" id="insurance" class="form-control"
+                                maxlength="1" onkeyup="updateCurrentGuide()">
+                        </div>
+						
+                        <div class="form-group mb-2">
+                            <label for="invoice_value">Valor Factura*</label>
+                            <input type="number" name="invoice_value" id="invoice_value" class="form-control"
+                                min="1" onkeyup="updateCurrentGuide()">
+                        </div>
+						<!--
+                        <div class="form-group mb-2">
+                            <label for="category">Categoría*</label>
+                            <input type="number" name="category" id="category" class="form-control"
+                                min="1" onkeyup="updateCurrentGuide()">
+                        </div>
+						
+                        <div class="form-group mb-2">
+                            <label for="content">Contenido*</label>
+                            <input type="number" name="content" id="content" class="form-control"
+                                min="1" onkeyup="updateCurrentGuide()">
+                        </div>-->
+						
+                        <div class="form-group mb-2">
+                            <label for="item_reference">Referencia del ítem*</label>
+                            <input type="text" name="item_reference" id="item_reference" class="form-control"
+                               maxlength="30" onkeyup="updateCurrentGuide()">
+                        </div>
+
+
+						<!--
+                        <div class="form-group mb-2">
+                            <label for="source_address">Alias de Dirección Origen*</label>
+                            <input type="text" name="source_address" id="source_address" class="form-control"
+                                maxlength="30" onkeyup="updateCurrentGuide()">
+                        </div>-->
+
+                        <div class="form-group mb-2">
+                            <label for="destination_address">Alias de Dirección Destino*</label>
+                            <input type="text" name="destination_address" id="destination_address" class="form-control"
+                                maxlength="30" onkeyup="updateCurrentGuide()">
+                        </div>
+
+
+                        <div class="form-group mb-2">
+                            <label for="guides_cuantity">Cantidad de Guías*</label>
+                            <input type="number" name="guides_cuantity" id="guides_cuantity" class="form-control"
+                                min="1" max="99" onkeyup="updateCurrentGuide()">
+                        </div>
+						<!--
+                        <div class="form-group mb-2">
+                            <label for="email">Correo Electrónico</label>
+                            <input type="text" name="email" id="email" class="form-control"
+                               maxlength="250" onkeyup="updateCurrentGuide()">
+                        </div>
+
+						<div class="form-group mb-2">
+                            <label for="comments">Comentarios</label>
+                            <input type="text" name="comments" id="comments" class="form-control"
+                               maxlength="1000" onkeyup="updateCurrentGuide()">
+                        </div>						
+						<!--						
+						<div class="form-group mb-2">
                             <label for="declared_value">Valor declarado (Opcional / Aseguramiento)</label>
                             <input type="number" name="declared_value" id="declared_value" class="form-control"
                                 min="1" onkeyup="updateCurrentGuide()">
@@ -321,8 +456,8 @@
                         <div class="form-group mb-2">
                             <label for="weight">Peso</label>
                             <input type="number" name="weight" id="weight" class="form-control"
-                                min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
-                        </div>
+                                min="1" max="99" step="10" value='1' onkeyup="updateCurrentGuide()">
+                        </div>-->
                     </section>
 
                     <section class="col-lg-6 col-md-12">
