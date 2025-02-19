@@ -45,7 +45,7 @@ function copyToClipboard(text) {
     $(textArea).remove();
 
     const options = {
-        msg: 'Copeado al portapapeles',
+        msg: 'Copiado al portapapeles',
         icon: 'flag',
         type: 'primary'
     }
