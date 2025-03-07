@@ -97,12 +97,11 @@
             $('#service_modality').val('');
             $('#weight').val('');
             $('#long').val('');
-			$('#width').val('');
-			$('#high').val('');
-			$('#item_reference').val('');
-			$('#source_address').val('');
-			$('#destination_address').val('');
-			$('#guides_cuantity').val('');
+	    $('#width').val('');
+	    $('#high').val('');
+	    $('#source_address').val('');
+	    $('#destination_address').val('');
+	    $('#guides_cuantity').val('');
 			
             currentGuide = {};
         }
@@ -134,7 +133,7 @@
         }
 
         function guideToText(guide) {
-            const guideInTextFormat = `5898550||${guide.serviceModality}|PQT|${guide.weight}|${guide.long}|${guide.width}|${guide.high}|F||ACCESORIOS|PRODUCTO|${guide.itemReference}||DD|${guide.destinationAddress}||${guide.guidesCuantity}|| `;
+            const guideInTextFormat = `5898550||${guide.serviceModality}|PQT|${guide.weight}|${guide.long}|${guide.width}|${guide.high}|F||ACCESORIOS|PRODUCTO|ACCESORIOS DE COMPUTO||DD|${guide.destinationAddress}||${guide.guidesCuantity}|| `;
             return guideInTextFormat;
         }
 
@@ -198,7 +197,6 @@
 				long: $('#long').val(),
 				width: $('#width').val(),
 				high: $('#high').val(),
-				itemReference: $('#item_reference').val().toUpperCase(),
 				destinationAddress: $('#destination_address').val().toUpperCase(),
 				guidesCuantity: $('#guides_cuantity').val(),
             };
@@ -213,8 +211,6 @@
             let errors = [];
             if (!guide.serviceModality)
                 errors.push('El campo Servicio Modalidad es requerido');
-            if (!guide.itemReference)
-                errors.push('El campo Referencia del Item es requerido');
             if (!guide.destinationAddress)
                 errors.push('El campo Alias de Dirección Destino es requerido');
             if (!guide.guidesCuantity)
@@ -388,7 +384,7 @@
                             <label for="content">Contenido*</label>
                             <input type="number" name="content" id="content" class="form-control"
                                 min="1" onkeyup="updateCurrentGuide()">
-                        </div>-->
+                        </div>
 						
                         <div class="form-group mb-2">
                             <label for="item_reference">Referencia del ítem*</label>
