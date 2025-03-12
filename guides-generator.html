@@ -62,6 +62,51 @@
             // submit form on enter
         });
 
+	document.addEventListener("DOMContentLoaded", () => {
+		const selectPesoVolumetrico = document.getElementById("pesoVolumetrico");
+		const inputPeso = document.getElementById("weight");
+		const inputAncho = document.getElementById("width");
+		const inputLargo = document.getElementById("long");
+		const inputAlto = document.getElementById("high");
+
+		let datos = [];
+		document.getElementById("fileInput").addEventListener("change", function(event) {
+			const file = event.target.files[0];
+			if (!file) return;
+			
+		
+			const reader = new FileReader();
+			reader.onload = function(e) {
+				const text = e.target.result;
+				datos = text.split("\n").map(line => line.split(",").map(num => num.trim()));
+				// Llenar el <select> con las opciones de Peso Volumétrico
+				datos.forEach(row => {
+					if (row.length === 5) { // Asegurar que la línea tiene 5 valores
+						const option = document.createElement("option");
+						option.value = row[0]; // Peso Volumétrico
+						option.textContent = row[0] + " kg"; 
+						selectPesoVolumetrico.appendChild(option);
+					}
+				});
+			};
+			reader.readAsText(file);
+		});
+			
+
+		// Actualizar los inputs al seleccionar un peso volumétrico
+		selectPesoVolumetrico.addEventListener("change", () => {
+			const seleccion = selectPesoVolumetrico.value;
+			const fila = datos.find(row => row[0] === seleccion);
+			if (fila) {
+				inputPeso.value = fila[1];
+				inputAncho.value = fila[2];
+				inputLargo.value = fila[3];
+				inputAlto.value = fila[4];
+			}
+		});
+	});
+			    
+
         function addGuide() {
             const guide = getCurrentGuide();
             errors = validateGuide(guide);
@@ -192,13 +237,13 @@
 
         function updateCurrentGuide() {
             currentGuide = {
-				serviceModality: $('#service_modality').val(),
-				weight: $('#weight').val(),
-				long: $('#long').val(),
-				width: $('#width').val(),
-				high: $('#high').val(),
-				destinationAddress: $('#destination_address').val().toUpperCase(),
-				guidesCuantity: $('#guides_cuantity').val(),
+		serviceModality: $('#service_modality').val(),
+		weight: $('#weight').val(),
+		long: $('#long').val(),
+		width: $('#width').val(),
+		high: $('#high').val(),
+		destinationAddress: $('#destination_address').val().toUpperCase(),
+		guidesCuantity: $('#guides_cuantity').val(),
             };
 
         }
@@ -308,7 +353,7 @@
                 <div class="row">
                     <section class="col-lg-6 col-md-12">
                         <!--
-						<div class="form-group mb-2">
+			<div class="form-group mb-2">
                             <label for="service_code">Código de servicio</label>
                             <select name="service_code" id="service_code" class="form-control"
                                 onchange="updateCurrentGuide()">
@@ -361,7 +406,12 @@
                             <input type="number" name="high" id="high" class="form-control"
                                 min="1" max="99" step="1" value='1' onkeyup="updateCurrentGuide()">
                         </div>
-						<!--
+			<label for="pesoVolumetrico">Peso Volumétrico:</label>
+			<select id="pesoVolumetrico">
+				<option value="">Selecciona un peso</option>
+			</select>
+			<input type="file" id="fileInput">			    
+			<!--
                         <div class="form-group mb-2">
                             <label for="insurance">Seguro</label>
                             <input type="text" name="insurance" id="insurance" class="form-control"
