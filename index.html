@@ -101,7 +101,7 @@
         }
 
         function addressToText(address) {
-            let addressInTextFormat = `${address.shortName}|Ventas|${address.client}|${address.email}||mx|${address.businessName}|${address.street}|${address.street2}|${address.colony}|${address.zc}|${address.tel1}|${address.tel2}|${address.state}|${address.city}\n`;
+            let addressInTextFormat = `${address.shortName}|Ventas|${address.zc}|${address.client}||${address.businessName}|mx|${address.state}|${address.city}|${address.street}|||${address.number}||${address.colony}|${address.tel2}||${address.tel1}|${address.email}| \n`;
 
             return addressInTextFormat;
         }
@@ -270,7 +270,7 @@
             if (obj.client.length > 30)
                 obj.client = obj.client.substring(0, 29); // Cut down the name to 30 chars
 
-            obj.street += ` ${obj.number}`;
+            obj.number = ` ${obj.number}`;
 
             if (obj.street.length > 30) {
                 let cutTo = 30;
