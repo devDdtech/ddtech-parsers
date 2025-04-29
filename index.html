@@ -101,7 +101,7 @@
         }
 
         function addressToText(address) {
-            let addressInTextFormat = `${address.shortName}|Nacional|${address.zc}|${address.client}||${address.shortName}|Mexico|${address.state}|${address.city}|${address.street}|||${address.number}||${address.colony}|${address.tel2}||${address.tel1}|${address.email}| \n`;
+            let addressInTextFormat = `${address.shortName}|Nacional|${address.zc}|${address.client}||${address.shortName}|Mexico|${address.state}|${address.city}|${address.street}|||${address.number}||${address.colony}|${address.tel2}||${address.tel1}|${address.email}|${address.street2} \n`;
 
             return addressInTextFormat;
         }
@@ -183,9 +183,11 @@
             obj.state = lastMatch(addressData, /Ciudad(.)*\n[\s>]*Estado(.)*/g)
                 .replace(/Ciudad(.)*\n[\s>]*Estado[\s]+/g, '').replace('\n', '');
 
-            obj.number = lastMatch(addressData, /Número(.)*\n/g).replace('Número ', '').replace('\n', '');
-            obj.street = lastMatch(addressData, /Calle(.)*\n/g).replace('Calle ', '').replace('\n', '');
-            obj.additionalInfo = addressData.match(/Información adicional(.)*\n/g)[0].replace('Información adicional ', '');
+            obj.number  = lastMatch(addressData, /Número(.)*\n/g).replace('Número ', '').replace('\n', '');
+            obj.street  = lastMatch(addressData, /Calle(.)*\n/g).replace('Calle ', '').replace('\n', '');
+			const rtxt  = document.getElementById("references").value;
+			obj.street2 = rtxt;
+			obj.additionalInfo = addressData.match(/Información adicional(.)*\n/g)[0].replace('Información adicional ', '');
 
             return obj;
         }
@@ -227,7 +229,18 @@
             $('#update_attr_' + attr).focus();
         }
 
-        function highlightErrorFields(errorFields) {
+		function actualizarLabels() {
+			const texto = document.getElementById("references").value;
+			const labels = document.querySelectorAll(".address-street2-preview");
+
+			labels.forEach(label => {
+				label.textContent = texto;
+			});
+			
+			updatePreview();
+		}
+        
+		function highlightErrorFields(errorFields) {
             $('.preview-error').removeClass('preview-error');
 
             errorFields.forEach(field => {
@@ -280,7 +293,7 @@
                         cutTo -= 1;
                 }
 
-                obj.street2 = obj.street.substring(cutTo, 999).trim(); // Complete street #2 with chars beyond limit in street #1
+                //obj.street2 = obj.street.substring(cutTo, 999).trim(); // Complete street #2 with chars beyond limit in street #1
                 obj.street = obj.street.substring(0, cutTo); // Limit street #1 chars to no more than 30 chars
             }
 
@@ -344,8 +357,8 @@
                 'tel1': 'Teléfono #1',
                 'tel2': 'Teléfono #2',
                 'email': 'Correo Electrónico',
-                'street': 'Calle #1',
-                'street2': 'Calle #2',
+                'street': 'Calle',
+                'street2': 'Referencias',
                 'number': 'Número',
                 'zc': 'C.P.',
                 'colony': 'Colonia',
@@ -473,6 +486,11 @@
                             <label for="gmail_address">Domicilio Gmail</label>
                             <textarea name="gmail_address" id="gmail_address" cols="30" rows="10" class="form-control"
                                 oninput="updatePreview()" placeholder="* Domicilio Gmail ---" data-monitor-feed=true></textarea>
+                        </div>
+						<div class="form-group">
+                            <label for="references">Referencias</label>
+                            <textarea name="references" id="references" oninput="actualizarLabels()" cols="30" rows="3" class="form-control"
+                                placeholder="* Referencias ---" data-monitor-feed=true></textarea>
                         </div>
                     </section>
 
